@@ -1,4 +1,4 @@
-import { inspectMp4, optimizeMp4, verifyMediaIdentity, formatBytes } from './mp4.js';
+import { inspectMp4, formatBytes } from './mp4.js';
 import { listHistory, saveHistory, clearHistory } from './history.js';
 
 const $ = id => document.getElementById(id); const input=$('file-input'), drop=$('drop-zone'), job=$('job'), analysis=$('analysis'), message=$('message'), optimize=$('optimize'), download=$('download');
@@ -12,8 +12,8 @@ async function selectFile(file){
   if(!file)return; if(outputUrl){URL.revokeObjectURL(outputUrl);outputUrl=null} download.classList.add('hidden'); job.classList.remove('hidden'); $('file-name').textContent=file.name; $('file-size').textContent=formatBytes(file.size); optimize.disabled=true; setMessage('Inspecting MP4 structure…'); analysis.innerHTML='';
   try{current=await inspectMp4(file);analysis.innerHTML=metric('VIDEO',current.videoCodec)+metric('AUDIO',current.audioCodec)+metric('INDEX',current.fastStart?'Already forward':'At file end');
     if(current.videoCodec==='Other') throw new Error('No supported H.264 or H.265 video track was detected.');
-    if(current.audioCodec==='Not detected') setMessage('No AAC audio track was detected. The file can be optimized, but TikTok compatibility may be lower.');
-    else setMessage(current.fastStart?'This file already uses fast-start layout. You may download an unchanged copy.':'Ready. The media payload will be reused byte-for-byte.','good'); optimize.disabled=false;
+    if(current.audioCodec==='Not detected') setMessage('No AAC audio track was detected. The file can be remuxed, but TikTok compatibility may be lower.');
+    else setMessage('Ready for lossless audio/video interleaving. The encoded streams will not be re-encoded.','good'); optimize.disabled=false;
   }catch(e){current=null;setMessage(e.message,'error')}
 }
 drop.addEventListener('click',()=>input.click()); input.addEventListener('change',()=>selectFile(input.files[0]));
@@ -22,11 +22,11 @@ for(const type of ['dragleave','drop'])drop.addEventListener(type,e=>{e.preventD
 drop.addEventListener('drop',e=>selectFile(e.dataTransfer.files[0]));
 $('reset').addEventListener('click',()=>{current=null;input.value='';job.classList.add('hidden');if(outputUrl)URL.revokeObjectURL(outputUrl)});
 optimize.addEventListener('click',async()=>{
-  if(!current)return; optimize.disabled=true;$('progress-wrap').classList.remove('hidden');$('progress').style.width='32%';setMessage('Rebuilding the MP4 container…');
-  try{const result=await optimizeMp4(current);$('progress').style.width='72%';const verified=await verifyMediaIdentity(current.file,result.blob,current,result);if(!verified)throw new Error('Media verification failed. The output was discarded.');$('progress').style.width='100%';
-    const name=outputName(current.file.name);outputUrl=URL.createObjectURL(result.blob);download.href=outputUrl;download.download=name;download.classList.remove('hidden');analysis.innerHTML=metric('VIDEO',current.videoCodec)+metric('MEDIA CHECK','Byte-identical samples')+metric('OFFSETS',result.changed?`${result.entries} patched`:'No change');setMessage(result.changed?'Optimization complete. The encoded media samples were not modified.':'This file was already optimized; an unchanged verified copy is ready.','good');
+  if(!current)return; optimize.disabled=true;$('reset').disabled=true;$('progress-wrap').classList.remove('hidden');$('progress').style.width='5%';setMessage('Preparing the lossless remux engine…');
+  try{const {remuxMp4}=await import('./remux.js');const result=await remuxMp4(current.file,{onPhase:text=>setMessage(text),onProgress:value=>$('progress').style.width=`${Math.round(18+value*62)}%`});$('progress').style.width='88%';const rebuilt=await inspectMp4(result.blob);if(!rebuilt.fastStart)throw new Error('The rebuilt file did not pass the fast-start check.');$('progress').style.width='100%';
+    const name=outputName(current.file.name);outputUrl=URL.createObjectURL(result.blob);download.href=outputUrl;download.download=name;download.classList.remove('hidden');analysis.innerHTML=metric('VIDEO',current.videoCodec)+metric('MEDIA CHECK',`${result.streamCount} stream hashes match`)+metric('LAYOUT','Interleaved + fast-start');setMessage('Lossless remux complete. Audio and video are interleaved, and the encoded streams are byte-identical.','good');
     try{await saveHistory(name,result.blob);await renderHistory()}catch{setMessage('Optimization complete. Browser history storage was unavailable; download the file now.','good')}
-  }catch(e){setMessage(e.message,'error')}finally{optimize.disabled=false;setTimeout(()=> $('progress-wrap').classList.add('hidden'),700)}
+  }catch(e){setMessage(e.message||'Remuxing failed. No output was created.','error')}finally{optimize.disabled=false;$('reset').disabled=false;setTimeout(()=> $('progress-wrap').classList.add('hidden'),700)}
 });
 
 async function renderHistory(){const list=$('history-list');try{const items=await listHistory();if(!items.length){list.innerHTML='<p class="empty">No optimized files yet.</p>';return}list.innerHTML='';for(const item of items){const url=URL.createObjectURL(item.blob);const el=document.createElement('article');el.className='history-card';el.innerHTML=`<div><strong></strong><span>${formatBytes(item.size)} · ${new Date(item.createdAt).toLocaleString()}</span></div><a download>Download</a>`;el.querySelector('strong').textContent=item.name;const a=el.querySelector('a');a.href=url;a.download=item.name;list.append(el)}}catch{list.innerHTML='<p class="empty">Recent-file storage is unavailable in this browser.</p>'}}
