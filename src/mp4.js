@@ -30,8 +30,8 @@ async function readHeader(file, offset) {
 
 export async function inspectMp4(file) {
   if (!file || file.size < 24) throw new Error('This file is too small to be a valid MP4/MOV video.');
-  const boxes = []; let offset = 0;
-  while (offset < file.size) { const box = await readHeader(file, offset); boxes.push(box); offset = box.end; if (boxes.length > 256) throw new Error('Unusually complex top-level MP4 layout.'); }
+  const boxes = []; let offset = 0; let trailingBytes = 0;
+  while (offset < file.size) { try { const box = await readHeader(file, offset); boxes.push(box); offset = box.end; if (boxes.length > 256) throw new Error('Unusually complex top-level MP4 layout.'); } catch (error) { if (boxes.some(box => box.type === 'moov') && boxes.some(box => box.type === 'mdat')) { trailingBytes=file.size-offset; break; } throw error; } }
   const moovs = boxes.filter(b => b.type === 'moov'); const mdats = boxes.filter(b => b.type === 'mdat'); const ftyp = boxes.find(b => b.type === 'ftyp');
   if (!ftyp || moovs.length !== 1 || mdats.length !== 1) throw new Error('FrameKeep supports files with one ftyp, one moov, and one mdat box. No changes were made.');
   if (moovs[0].size > 128 * 1024 * 1024) throw new Error('The MP4 index is unexpectedly large. No changes were made.');
@@ -40,7 +40,7 @@ export async function inspectMp4(file) {
   const videoCodec = signature.includes('avc1') || signature.includes('avc3') ? 'H.264' : signature.includes('hvc1') || signature.includes('hev1') ? 'H.265 / HEVC' : 'Other';
   const audioCodec = signature.includes('mp4a') ? 'AAC' : signature.includes('Opus') ? 'Opus' : 'Not detected';
   const fastStart = moovs[0].start < mdats[0].start;
-  return { file, boxes, ftyp, moov: moovs[0], mdat: mdats[0], moovBytes, videoCodec, audioCodec, fastStart };
+  return { file, boxes, ftyp, moov: moovs[0], mdat: mdats[0], moovBytes, videoCodec, audioCodec, fastStart, trailingBytes };
 }
 
 function walkBoxes(bytes, start, end, visit) {

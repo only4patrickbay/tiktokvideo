@@ -12,8 +12,8 @@ async function selectFile(file){
   if(!file)return; if(outputUrl){URL.revokeObjectURL(outputUrl);outputUrl=null} download.classList.add('hidden'); job.classList.remove('hidden'); $('file-name').textContent=file.name; $('file-size').textContent=formatBytes(file.size); optimize.disabled=true; setMessage('Inspecting MP4 structure…'); analysis.innerHTML='';
   try{current=await inspectMp4(file);analysis.innerHTML=metric('VIDEO',current.videoCodec)+metric('AUDIO',current.audioCodec)+metric('INDEX',current.fastStart?'Already forward':'At file end');
     if(current.videoCodec==='Other') throw new Error('No supported H.264 or H.265 video track was detected.');
-    if(current.audioCodec==='Not detected') setMessage('No AAC audio track was detected. The file can be remuxed, but TikTok compatibility may be lower.');
-    else setMessage('Ready for lossless audio/video interleaving. The encoded streams will not be re-encoded.','good'); optimize.disabled=false;
+    if(current.audioCodec==='Not detected') setMessage('An AAC audio track is required, even if it is silent.','error');
+    else setMessage('Ready for sample-level patching. The encoded video frames will not be re-encoded.','good'); optimize.disabled=current.audioCodec==='Not detected';
   }catch(e){current=null;setMessage(e.message,'error')}
 }
 drop.addEventListener('click',()=>input.click()); input.addEventListener('change',()=>selectFile(input.files[0]));
@@ -22,9 +22,9 @@ for(const type of ['dragleave','drop'])drop.addEventListener(type,e=>{e.preventD
 drop.addEventListener('drop',e=>selectFile(e.dataTransfer.files[0]));
 $('reset').addEventListener('click',()=>{current=null;input.value='';job.classList.add('hidden');if(outputUrl)URL.revokeObjectURL(outputUrl)});
 optimize.addEventListener('click',async()=>{
-  if(!current)return; optimize.disabled=true;$('reset').disabled=true;$('progress-wrap').classList.remove('hidden');$('progress').style.width='5%';setMessage('Preparing the lossless remux engine…');
-  try{const {remuxMp4}=await import('./remux.js');const result=await remuxMp4(current.file,{onPhase:text=>setMessage(text),onProgress:value=>$('progress').style.width=`${Math.round(18+value*62)}%`});$('progress').style.width='88%';const rebuilt=await inspectMp4(result.blob);if(!rebuilt.fastStart)throw new Error('The rebuilt file did not pass the fast-start check.');$('progress').style.width='100%';
-    const name=outputName(current.file.name);outputUrl=URL.createObjectURL(result.blob);download.href=outputUrl;download.download=name;download.classList.remove('hidden');analysis.innerHTML=metric('VIDEO',current.videoCodec)+metric('MEDIA CHECK',`${result.streamCount} stream hashes match`)+metric('LAYOUT','Interleaved + fast-start');setMessage('Lossless remux complete. Audio and video are interleaved, and the encoded streams are byte-identical.','good');
+  if(!current)return; optimize.disabled=true;$('reset').disabled=true;$('progress-wrap').classList.remove('hidden');$('progress').style.width='5%';setMessage('Preparing the sample-level patch…');
+  try{const {patchMp4}=await import('./patch.js');const result=await patchMp4(current.file,current,{onPhase:text=>setMessage(text),onProgress:value=>$('progress').style.width=`${Math.round(12+value*78)}%`});$('progress').style.width='100%';
+    const name=outputName(current.file.name);outputUrl=URL.createObjectURL(result.blob);download.href=outputUrl;download.download=name;download.classList.remove('hidden');analysis.innerHTML=metric('VIDEO',`${result.videoSamples} original samples`)+metric('TRACKS',`${result.tracks} verified`)+metric('LAYOUT','Sample-interleaved');setMessage(`Patch complete. Original video frames preserved; ${result.ghostSamples.toLocaleString()} structural audio samples added and verified.`,'good');
     try{await saveHistory(name,result.blob);await renderHistory()}catch{setMessage('Optimization complete. Browser history storage was unavailable; download the file now.','good')}
   }catch(e){setMessage(e.message||'Remuxing failed. No output was created.','error')}finally{optimize.disabled=false;$('reset').disabled=false;setTimeout(()=> $('progress-wrap').classList.add('hidden'),700)}
 });

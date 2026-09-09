@@ -27,9 +27,9 @@
 
     <main id="top">
       <section class="shell hero">
-        <div class="eyebrow"><span>NO RE-ENCODING</span> Lossless MP4 remuxing</div>
+        <div class="eyebrow"><span>NO RE-ENCODING</span> Sample-level MP4 patching</div>
         <h1>Keep your video.<br /><em>Fix the delivery.</em></h1>
-        <p class="hero-copy">Rebuild H.264 MP4 files with chronological audio/video interleaving and a forward playback index—without re-encoding the video or audio streams.</p>
+        <p class="hero-copy">Rebuild H.264 MP4 files with sample-level interleaving and a verified compatibility audio structure—without re-encoding the original video frames.</p>
         <div class="hero-actions">
           <a class="button primary" href="#optimizer">Optimize a video <span>↓</span></a>
           <a class="button ghost" href="#how">See how it works</a>
@@ -45,7 +45,7 @@
         <article class="panel tool-panel">
           <div class="section-label">01 / OPTIMIZE</div>
           <h2>Drop in your video</h2>
-          <p>The file stays on this device. FrameKeep losslessly remuxes the container, interleaves audio and video, moves the index forward, and verifies both stream hashes.</p>
+          <p>The file stays on this device. FrameKeep rebuilds the sample tables, interleaves audio and video, creates the compatibility track, and verifies the finished structure.</p>
 
           <input id="file-input" type="file" accept="video/mp4,video/quicktime,.mp4,.mov" hidden />
           <button id="drop-zone" class="drop-zone" type="button">
@@ -65,7 +65,7 @@
             <div id="analysis" class="analysis-grid"></div>
             <div id="message" class="message"></div>
             <div class="job-actions">
-              <button id="optimize" class="button primary" type="button">Lossless remux</button>
+              <button id="optimize" class="button primary" type="button">Patch video structure</button>
               <a id="download" class="button success hidden" download>Download optimized file</a>
             </div>
           </div>
@@ -78,8 +78,8 @@
           <div class="file-map after"><span>Optimized</span><div><i>ftyp</i><i class="index">moov</i><i class="media">media</i></div></div>
           <ul class="clean-list">
             <li><span>01</span><div><b>Inspect</b><p>Read file boxes, codecs and track requirements.</p></div></li>
-            <li><span>02</span><div><b>Interleave</b><p>Rewrite audio and video chunks in chronological order and move the index forward.</p></div></li>
-            <li><span>03</span><div><b>Verify</b><p>SHA-256-check every encoded video and audio stream before allowing download.</p></div></li>
+            <li><span>02</span><div><b>Rebuild</b><p>Interleave individual samples and construct the additional compatibility audio track.</p></div></li>
+            <li><span>03</span><div><b>Verify</b><p>Confirm all original video sample sizes and the new three-track structure.</p></div></li>
           </ul>
           <div class="note"><b>What it cannot do</b><p>It cannot force TikTok to preserve a resolution or bitrate. Platform processing can still change without notice.</p></div>
         </aside>
